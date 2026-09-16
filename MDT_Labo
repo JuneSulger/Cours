@@ -1,0 +1,47 @@
+Set-Location C:\VM\
+New-Item -ItemType Directory -Name SRV_MDT
+Set-Location .\SRV_MDT\
+New-Item -ItemType Directory -Name SRV_MDT
+
+Set-Location C:\VM\SRV_MDT\SRV_MDT
+New-VHD -Path .\SRV_MDT.vhdx -SizeBytes 127GB -Dynamic
+New-VHD -Path .\SRV_MDT.vhdx -SizeBytes 100GB -Dynamic
+New-VM -Name "SRV_MDT" -Generation 2 -MemoryStartupBytes 8GB -VHDPath .\SRV_MDT.vhdx -Path .\ -SwitchName "WAN"
+Set-VMMemory -VMName SRV_MDT -DynamicMemoryEnabled $false
+Set-VMProcessor -VMName SRV_MDT -Count 2
+Add-VMDvdDrive -VMName "SRV_MDT" -Path "C:\ISO\en-us_windows_server_2025_updated_nov_2025_x64_dvd_2cfcca22.iso"
+Start-VM -Name SRV_MDT
+vmconnect.exe localhost "SRV_MDT"
+
+New-NetIPAddress -InterfaceAlias "Ethernet" -IPAddress 10.10.28.110 -PrefixLength 24 -DefaultGateway 10.10.28.254
+Set-DnsClientServerAddress -InterfaceAlias "Ethernet" -ServerAddresses 10.10.28.110
+Disable-NetAdapterBinding -Name "Ethernet" -ComponentID ms_tcpip6
+Set-TimeZone -Id "Romance Standard Time"
+netsh.exe advfirewall set allprofiles state off
+Install-WindowsFeature -Name AD-Domain-Services -IncludeManagementTools
+Install-WindowsFeature -Name DNS -IncludeManagementTools
+Install-WindowsFeature -Name DHCP -IncludeManagementTools
+Install-WindowsFeature -Name WDS -IncludeManagementTools
+Rename-Computer -NewName "SRV-MDT" -Force
+Restart-Computer
+
+Install-ADDSForest -DomainName "corp.lan" -DomainNetbiosName "Corp" -InstallDns `
+  -SafeModeAdministratorPassword (ConvertTo-SecureString "P@ssw0rd!" -AsPlainText -Force) -Force
+Restart-Computer
+
+New-ADUser -Name "Technicien" -SamAccountName "Technicien" -UserPrincipalName "Technicien@corp.lan" `
+  -AccountPassword (ConvertTo-SecureString "P@ssw0rd" -AsPlainText -Force) -Enabled $true
+Add-ADGroupMember -Identity "Admins du Domaine" -Members "Technicien"
+Restart-Computer
+
+
+
+## Sur Machine Physique ##
+Commande pour créer NAT 
+New-NetNat -Name "NAT-MDT" -InternalIPInterfaceAddressPrefix 192.168.200.0/24
+
+
+Commande pour vérifier que le NAT est créée
+Get-NetNat
+
+
