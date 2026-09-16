@@ -1,6 +1,84 @@
 # Labo Docker — Installation, conteneurs et démonstration SSH
 
 > Environnement : Ubuntu 26.04 (VM Linux), Docker Engine installé via le dépôt `apt` officiel.
+> Rappels théoriques basés sur les supports de cours (CPU, virtualisation, Docker — Technocité).
+
+---
+
+## 0. Rappels théoriques du cours
+
+### Le CPU (processeur)
+
+- Le CPU (*Central Processing Unit*) est le composant qui exécute les opérations arithmétiques et le traitement de données — le « cerveau » de la machine. Concrètement, c'est une puce de silicium gravée de milliards de transistors ; plus la gravure est fine (nanomètres), plus le CPU est efficace et économe en énergie.
+- Tous les CPU ne partagent pas la même **architecture** (jeu d'instructions), et ces architectures sont incompatibles entre elles. Les deux principales aujourd'hui :
+  - **x86_64** (aka `amd64`) : architecture classique des PC (Intel, AMD)
+  - **ARM** (aka `aarch64`) : architecture classique des smartphones, et de plus en plus des Mac (puces M1/M2)
+- Un logiciel compilé pour une architecture ne fonctionne pas nativement sur une autre, sauf via un **émulateur** ou une couche de traduction (ex. Rosetta chez Apple pour faire tourner du x86_64 sur ARM, avec une perte de performance).
+- Historiquement, la puissance d'un CPU se mesurait en fréquence (MHz puis GHz). Depuis 2006, cette course a atteint ses limites physiques ; on combine désormais plusieurs facteurs : fréquence, nombre de cœurs, nombre de transistors, finesse de gravure. L'unité de mesure moderne est le **FLOPS** (opérations en virgule flottante par seconde), qui donne une mesure théorique de la vitesse de pointe.
+- Un CPU moderne est **multi-cœurs** : plusieurs cœurs physiques dans une même puce, parfois complétés par des cœurs « virtuels » via l'**HyperThreading** (gain de l'ordre de 30 %). Un logiciel conçu pour exploiter plusieurs cœurs à la fois est dit **multi-threadé**.
+- Sur un CPU de PC de bureau, le processeur est en général changeable (« clipsé » sur un socket) ; sur la quasi-totalité des ordinateurs portables, il est soudé à la carte mère.
+- Ce point est directement lié à Docker : une image construite pour `amd64` ne tournera pas nativement sur une machine `arm64` (et inversement) sans émulation — un point de vigilance quand on télécharge une image depuis le Docker Hub sur des architectures différentes (ex. Raspberry Pi vs PC).
+
+### La virtualisation
+
+- **Concept** : exécuter un ou plusieurs systèmes d'exploitation (potentiellement d'éditeurs différents) à l'intérieur d'un autre système d'exploitation, chacun isolé des autres.
+- **Vocabulaire** : la machine qui héberge s'appelle l'**hyperviseur** (ou « hôte de virtualisation ») ; les machines virtuelles exécutées sont les **invités de virtualisation**.
+- Deux types d'hyperviseurs :
+  - **Type 1** : tourne directement sur un système hôte minimaliste dédié à la virtualisation (ex. VMware ESX).
+  - **Type 2** : tourne comme une application au sein d'un système hôte complet déjà utilisé pour autre chose (ex. VirtualBox sur une machine de bureau classique).
+- Avantages classiques d'un hyperviseur : isolation entre VM et vis-à-vis de l'hôte, pause/reprise, exécution en tâche de fond, clonage complet ou partiel (**snapshot**, qui ne stocke que les différences par rapport à l'état de référence), import/export sous forme de fichier unique portable, dossiers partagés, presse-papier partagé, réseau isolé ou mutualisé entre VM. Les hyperviseurs avancés permettent aussi le **PassThrough** : dédier un périphérique physique (disque, carte réseau, GPU) à une VM avec un accès exclusif et des performances natives.
+- Pré-requis matériels : un CPU supportant les technologies d'accélération de virtualisation (**Intel-VT** ou **AMD-VX**), activées dans le BIOS/UEFI, plus suffisamment de RAM et d'espace disque.
+- Trois grandes familles de virtualisation :
+  - **Virtualisation complète** : la plus simple à mettre en œuvre, simule du matériel pour l'OS invité, mais uniquement pour une architecture CPU identique à l'hôte (ex. Oracle VirtualBox, VMware Workstation, Parallels Desktop, KVM).
+  - **Para-virtualisation** : le système invité *sait* qu'il est virtualisé (noyau modifié), et communique plus directement avec l'hôte via des pilotes spécifiques (ex. virtio) — performances bien supérieures (ex. VMware ESX, Microsoft Hyper-V, KVM avec paquets additionnels).
+  - **Isolateurs / conteneurs** : la famille à laquelle appartient Docker — voir plus bas.
+
+### Docker — concepts et commandes de base (complément au cours)
+
+- `docker info` : donne l'état général du moteur Docker (nombre de conteneurs, running/paused/stopped, nombre d'images, version du serveur).
+- Le **Dockerfile** d'`hello-world` illustre le principe de construction d'une image :
+  ```
+  FROM scratch        # image qui ne repose sur aucune autre image
+  COPY hello /        # copie le binaire "hello" à la racine du conteneur
+  CMD ["/hello"]       # exécute ce binaire au démarrage du conteneur
+  ```
+  Avant d'exécuter le programme, Docker crée un conteneur avec son propre espace de nommage et ses propres ressources, un système de fichiers isolé (via `chroot`), et lui applique un driver réseau.
+- **Le Docker Hub** (`hub.docker.com`, anciennement « docker store ») est le dépôt central et officiel d'images Docker. Il comporte une section d'images officiellement vérifiées (parfois avec support ou licence payante) et une section communautaire plus fournie mais moins fiable.
+  - Rechercher une image depuis la CLI : `docker search --filter=stars=15 ubuntu`
+  - Télécharger sans exécuter : `docker pull NOM_DE_L'IMAGE`
+  - Publier une image sur le registre public : `docker push NOM_DE_L'IMAGE` (nécessite un compte gratuit sur le Docker Hub)
+  - Se connecter / déconnecter en CLI : `docker login` / `docker logout`
+- **Docker Desktop** (Windows/macOS/Linux) s'appuie sur WSL 2 sous Windows — contrairement à son prédécesseur Docker-Toolbox qui installait une VM Linux complète via VirtualBox. Les interfaces graphiques de gestion de conteneurs ne remplacent pas la maîtrise de la CLI, qui reste l'objectif pédagogique du cours.
+
+### Commandes complémentaires vues en cours (non pratiquées dans ce labo)
+
+| Commande | Usage |
+|---|---|
+| `docker ps` / `docker ps --all` | Conteneurs en cours / tous les conteneurs (y compris arrêtés) |
+| `docker images` | Lister les images téléchargées localement |
+| `docker (un)pause NOM` | Met en pause / reprend un conteneur |
+| `docker update NOM` | Modifie les ressources CPU/mémoire allouées à un conteneur |
+| `docker restart NOM` | Redémarre un conteneur en cours |
+| `docker kill -s 9 NOM` | Tue le conteneur immédiatement, sans lui laisser terminer sa tâche (contrairement à `stop`) |
+| `docker logs NOM` | Consulter les journaux d'un conteneur |
+| `docker logs --follow NOM` | Suivre les journaux en continu |
+| `docker logs --tail 10 NOM` | Afficher les 10 dernières lignes du journal |
+| `docker events` | Voir les évènements du moteur Docker en temps réel |
+| `docker stats NOM` (`--no-stream`) | Monitorer les ressources consommées par un conteneur (vue instantanée avec `--no-stream`) |
+| `docker rename NOM` | Renommer un conteneur |
+| `docker cp Container:SRC DEST` | Copier un fichier/dossier entre conteneur et hôte |
+| `docker export NOM > fichier.tar` | Exporter l'entièreté du système de fichiers d'un conteneur |
+| `docker diff NOM` | Consulter les modifications apportées à un conteneur par rapport à son image de base |
+| `docker commit NOM_IMAGE MA_NOUVELLE_IMAGE` | Sauvegarder les modifications d'un conteneur dans une nouvelle image locale (ne publie pas sur le Hub ; n'enregistre que la différence avec l'image de base) |
+| `docker rm NOM` | Supprimer un conteneur (après arrêt) |
+| `docker system prune` | Nettoyer toutes les images/conteneurs orphelins ou inutiles |
+| `docker run --privileged` | Lance le conteneur avec les droits root étendus — ⚠️ à utiliser avec prudence |
+| `docker run --name NOM` | Personnalise le nom d'une instance |
+| `docker run --rm` | Supprime automatiquement le conteneur une fois stoppé |
+| `docker run --volumes-from` | Hérite des volumes d'un autre conteneur |
+| `docker run --volume-driver` | Choisit la technologie de gestion des volumes |
+
+> **Rappel important** : le système de fichiers d'un conteneur est **immuable** par défaut — toute modification vit dans sa writable layer (cf. point clé n°8 de ce labo). `docker commit` est le mécanisme officiel pour figer ces modifications dans une nouvelle image réutilisable.
 
 ---
 
@@ -298,3 +376,5 @@ sudo docker rm -f <container_id>
 - **Pas de systemd dans un conteneur minimal** — les démons doivent être lancés manuellement en exécutable.
 - **Isolation réseau** : `docker0` (pont hôte) + une interface `veth` dédiée par conteneur actif.
 - **Kernel partagé** entre hôte et conteneurs — différence fondamentale avec une VM complète.
+- **Docker = conteneurs/isolateurs**, une des trois grandes familles de virtualisation aux côtés de la virtualisation complète et de la para-virtualisation — plus légère qu'une VM classique car elle ne simule pas de matériel et partage le noyau de l'hôte.
+- **PID 1 dans un conteneur = l'application elle-même**, pas `systemd` comme sur un Linux classique. Un « service » Docker correspond en général à *un* processus applicatif, isolé dans *son propre* conteneur — d'où l'absence de `systemctl` et la nécessité de lancer les démons manuellement (ex. `/usr/sbin/sshd`) ou via `docker run --name`, un conteneur par service plutôt qu'un conteneur multi-services.
