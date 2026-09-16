@@ -229,13 +229,18 @@ Restart-Computer
 ### Sur l'hôte Hyper-V — création et attachement des VHDX
 
 ```powershell
-New-VHD -Path "C:\VM\SRV_SQLLab1\SRV_SQL\SRV_SQL-DATA.vhdx" -SizeBytes 40GB -Dynamic
-New-VHD -Path "C:\VM\SRV_SQLLab1\SRV_SQL\SRV_SQL-LOG.vhdx" -SizeBytes 20GB -Dynamic
-New-VHD -Path "C:\VM\SRV_SQLLab1\SRV_SQL\SRV_SQL-TEMPDB.vhdx" -SizeBytes 20GB -Dynamic
+New-VHD -Path "C:\VM\LABO\SQL01\SQL01-LOG.vhdx" -SizeBytes 20GB -Dynamic
+New-VHD -Path "C:\VM\LABO\SQL01\SQL01-TEMPDB.vhdx" -SizeBytes 20GB -Dynamic
 
-Add-VMHardDiskDrive -VMName "SRV_SQL" -Path "C:\VM\SRV_SQLLab1\SRV_SQL\SRV_SQL-DATA.vhdx"
-Add-VMHardDiskDrive -VMName "SRV_SQL" -Path "C:\VM\SRV_SQLLab1\SRV_SQL\SRV_SQL-LOG.vhdx"
-Add-VMHardDiskDrive -VMName "SRV_SQL" -Path "C:\VM\SRV_SQLLab1\SRV_SQL\SRV_SQL-TEMPDB.vhdx"
+Add-VMHardDiskDrive -VMName "SQL01" -Path "C:\VM\LABO\SQL01\SQL01-LOG.vhdx"
+Add-VMHardDiskDrive -VMName "SQL01" -Path "C:\VM\LABO\SQL01\SQL01-TEMPDB.vhdx"
+
+
+New-VHD -Path "C:\VM\LABO\SQL02\SQL02-LOG.vhdx" -SizeBytes 20GB -Dynamic
+New-VHD -Path "C:\VM\LABO\SQL02\SQL02-TEMPDB.vhdx" -SizeBytes 20GB -Dynamic
+
+Add-VMHardDiskDrive -VMName "SQL02" -Path "C:\VM\LABO\SQL02\SQL02-LOG.vhdx"
+Add-VMHardDiskDrive -VMName "SQL02" -Path "C:\VM\LABO\SQL01\SQL01-TEMPDB.vhdx"
 ```
 
 Vérification de l'attachement :
