@@ -80,6 +80,14 @@ ping 192.168.100.10
 ```
 → ping réussi, confirmant que les deux VMs se voient bien sur le réseau.
 
+**💡 Outil de diagnostic utile (a posteriori)** : en cas de souci de connexion NFS plus tard, `nc -vz IP PORT` (netcat, mode `-z` = scan sans envoi de données, `-v` = verbeux) permet de vérifier si un port TCP précis est ouvert et joignable, **indépendamment de Docker et de NFS** — un test réseau pur. Ça permet d'isoler rapidement la cause d'un problème :
+```bash
+nc -vz 192.168.100.10 2049   # port NFSv4 (protocole unique, pas de rpcbind nécessaire)
+nc -vz 192.168.100.10 111    # port rpcbind/portmapper, utilisé par NFSv3
+```
+- Port fermé/injoignable → problème réseau ou service NFS non démarré côté serveur
+- Port ouvert mais montage qui échoue quand même → le problème vient d'ailleurs (client NFS manquant, syntaxe de la commande, etc. — comme rencontré plus loin dans ce TD)
+
 ---
 
 ## 2. Partie 2 — Création du volume Docker exploitant le partage NFS (sur `lab-docker`)
@@ -128,6 +136,17 @@ sudo mount -t nfs 192.168.100.10:/srv/nfs/docker /mnt/test-nfs
 df -h | grep test-nfs   # confirme le montage
 sudo umount /mnt/test-nfs
 ```
+
+**💭 Piste alternative (non testée)** : il est possible que forcer NFSv4 dans la commande de création du volume aurait évité d'avoir à installer `nfs-common` :
+```bash
+sudo docker volume create --driver local \
+--opt type=nfs \
+--opt o=addr=192.168.100.10,rw,nfsvers=4 \
+--opt device=:/srv/nfs/docker \
+my_nfs_volume
+```
+Explication technique : NFSv3 repose sur un protocole `MOUNT` séparé, négocié dynamiquement via `rpcbind`/`portmapper` — un montage "brut" sans le binaire `mount.nfs` (fourni par `nfs-common`) doit alors construire une structure binaire spécifique, difficile à produire sans cet utilitaire. NFSv4, lui, se passe entièrement du protocole `MOUNT` et de `rpcbind` : tout transite sur le seul port 2049, via des options texte simples que le noyau Linux peut interpréter directement. En forçant `nfsvers=4`, Docker aurait donc pu potentiellement effectuer le montage par un appel système direct, sans passer par `nfs-common`.
+⚠️ Non vérifié dans ce TD : dans notre cas, l'installation de `nfs-common` a bien résolu le problème (sans `nfsvers=4`), donc le diagnostic posé reste correct pour ce contexte précis (NFSv3 par défaut). À tester séparément (ex. en désinstallant `nfs-common` puis en retentant avec `nfsvers=4`) pour confirmer l'hypothèse.
 
 **⚠️ Erreur rencontrée (2/2)** : en suivant la commande du PDF à la lettre (`docker run -d --name CONTENEUR --mount source=my_nfs_volume,target=/app busybox`, sans commande finale), le conteneur démarrait puis s'arrêtait **immédiatement** — `busybox` sans argument lance son `sh` par défaut, qui se termine aussitôt faute de terminal interactif attaché (`-it` absent avec `-d`). `docker ps` restait donc vide, et même un `docker start` suivi d'un `exec -it` échouait car le conteneur s'arrêtait plus vite que la commande `exec` ne pouvait s'exécuter.
 Solution retenue : ajouter `sleep infinity` à la fin de la commande `docker run` pour garder le conteneur actif en arrière-plan — même logique que pour `My_Debian` dans le TD précédent sur les volumes locaux.
