@@ -255,6 +255,83 @@ Résultat final : "salut" affiché 5 fois, avec 1,5 seconde entre chaque afficha
 
 ---
 
+## 4. TD — Création d'un volume et de données persistantes
+
+### Étape 1 — Image de base
+
+```bash
+docker pull debian:latest
+```
+
+### Étape 2 — Création du volume
+
+```bash
+docker volume create my_local_volume
+```
+
+### Étape 3 — Lancement du conteneur avec le volume monté
+
+Conteneur lancé en tâche de fond, avec le volume monté dans `/mnt`, et `sleep infinity` comme process principal pour le garder actif sans commande interactive :
+```bash
+docker run -d --name My_Debian -v my_local_volume:/mnt debian:latest sleep infinity
+```
+
+### Étape 4 — Entrée dans le conteneur
+
+```bash
+docker exec -it My_Debian bash
+```
+
+### Étape 5 — Création d'un fichier dans le volume
+
+Depuis l'intérieur du conteneur, création de `/mnt/Salut.txt` via redirection :
+```bash
+echo "Salut, volume local" > /mnt/Salut.txt
+```
+
+### Étape 6 — Arrêt du conteneur
+
+```bash
+docker stop My_Debian
+```
+
+### Étape 7 — Localisation réelle du volume sur l'hôte
+
+Commande dédiée pour inspecter un volume :
+```bash
+docker volume inspect my_local_volume
+```
+Retourne un JSON contenant, entre autres, le champ `Mountpoint` — chemin réel du volume sur le système hôte. Pour récupérer directement ce chemin sans le JSON complet :
+```bash
+docker volume inspect --format '{{ .Mountpoint }}' my_local_volume
+```
+Résultat obtenu :
+```
+/var/lib/docker/volumes/my_local_volume/_data
+```
+
+**⚠️ Erreurs rencontrées :**
+1. `permission denied while trying to connect to the docker API at unix:///var/run/docker.sock` — l'utilisateur courant n'appartient pas au groupe `docker`. Deux solutions :
+   - Rapide (temporaire) : préfixer les commandes Docker par `sudo`.
+   - Propre (permanente) : `sudo usermod -aG docker $USER`, puis se déconnecter/reconnecter (ou `newgrp docker`) pour que le changement de groupe soit pris en compte.
+2. Une fois le `Mountpoint` obtenu, `ls` dessus renvoyait `Permission denied` — le dossier appartient à `root`. Nécessite également `sudo` (voir étape 8).
+
+### Étape 8 — Listage du contenu du dossier hôte
+
+```bash
+sudo ls /var/lib/docker/volumes/my_local_volume/_data
+```
+`Salut.txt` y apparaît bien, confirmant que les données écrites dans le conteneur via `/mnt` sont persistées sur l'hôte, **même conteneur arrêté**.
+
+Vérification optionnelle du contenu :
+```bash
+sudo cat /var/lib/docker/volumes/my_local_volume/_data/Salut.txt
+```
+
+> **Point clé retenu** : `docker volume inspect` est la commande Docker dédiée pour retrouver l'emplacement physique d'un volume sur l'hôte (`Mountpoint`) ; l'accès à ce dossier système nécessite ensuite les droits `root` (`sudo`), qu'on utilise Docker en `sudo` ou non.
+
+---
+
 ## Points clés à retenir
 
 - Un Dockerfile encode la **construction** d'une image (`RUN`, `COPY`, `ADD`) ; `CMD`/`ENTRYPOINT` définissent son comportement **à l'exécution**.
