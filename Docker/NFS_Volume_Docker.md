@@ -10,11 +10,11 @@ Deux VMs Ubuntu Server LTS créées sous **Hyper-V** (Génération 2), reliées 
 
 | VM | Hostname | Rôle | Adresse IP |
 |---|---|---|---|
-| VM 1 | `lab-nfs` | Serveur NFS | `192.168.XXX.XX` |
-| VM 2 | `lab-docker` | Hôte Docker | `192.168.XXX.XX` |
+| VM 1 | `lab-nfs` | Serveur NFS | `192.168.100.10` |
+| VM 2 | `lab-docker` | Hôte Docker | `192.168.100.11` |
 
-- Subnet : `192.168.XXX.X/24`
-- Gateway : `192.168.XXX.X`
+- Subnet : `192.168.100.0/24`
+- Gateway : `192.168.100.1`
 - Name server : `127.0.0.1, 8.8.8.8`
 - Utilisateur : `june` (minuscules — convention Unix standard pour les usernames)
 - Hostnames en minuscules-tirets (`lab-nfs`, `lab-docker`) — convention DNS/Unix, contrairement aux noms `LAB_NFS`/`LAB_DOCKER` initialement envisagés (majuscules + underscore non recommandés pour un hostname)
@@ -181,6 +181,40 @@ ls /srv/nfs/docker
 cat /srv/nfs/docker/hello.txt
 ```
 → `hello.txt` bien présent, malgré la suppression du conteneur. Confirme que les données générées dans le conteneur sont réellement persistées sur le stockage distant via NFS.
+
+---
+
+## 3. Annexe — Pare-feu simplifié sur Linux (UFW)
+
+`ufw` (Uncomplicated FireWall) est une surcouche simplifiée d'`iptables`, pratique pour gérer un pare-feu Linux sans manipuler directement les règles bas niveau.
+
+**Installer et activer :**
+```bash
+sudo apt install ufw
+sudo ufw enable
+```
+
+**Autoriser/ouvrir un port :**
+```bash
+sudo ufw allow N°PORT
+```
+
+**Interdire/fermer un port :**
+```bash
+sudo ufw deny N°PORT
+```
+
+**Forcer l'application des règles :**
+```bash
+sudo ufw reload
+```
+
+**Vérifier les règles appliquées :**
+```bash
+sudo ufw status numbered
+```
+
+> UFW est installé par défaut sur Ubuntu, mais **inactif**. Il n'est **pas installé par défaut** sur Debian.
 
 ---
 
