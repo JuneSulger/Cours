@@ -10,11 +10,11 @@ Deux VMs Ubuntu Server LTS créées sous **Hyper-V** (Génération 2), reliées 
 
 | VM | Hostname | Rôle | Adresse IP |
 |---|---|---|---|
-| VM 1 | `lab-nfs` | Serveur NFS | `192.168.100.10` |
-| VM 2 | `lab-docker` | Hôte Docker | `192.168.100.11` |
+| VM 1 | `lab-nfs` | Serveur NFS | `192.168.XXX.XX` |
+| VM 2 | `lab-docker` | Hôte Docker | `192.168.XXX.XX` |
 
-- Subnet : `192.168.100.0/24`
-- Gateway : `192.168.100.1`
+- Subnet : `192.168.XXX.X/24`
+- Gateway : `192.168.XXX.X`
 - Name server : `127.0.0.1, 8.8.8.8`
 - Utilisateur : `june` (minuscules — convention Unix standard pour les usernames)
 - Hostnames en minuscules-tirets (`lab-nfs`, `lab-docker`) — convention DNS/Unix, contrairement aux noms `LAB_NFS`/`LAB_DOCKER` initialement envisagés (majuscules + underscore non recommandés pour un hostname)
