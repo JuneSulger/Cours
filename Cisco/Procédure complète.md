@@ -1,6 +1,6 @@
 # Procédure complète — Configuration d'une topologie Cisco (switch(s) + routeur)
 
-Ordre logique unique, de la remise à zéro d'un appareil jusqu'à un réseau segmenté, routé et sécurisé. Chaque phase explique pourquoi elle vient à ce moment précis. À adapter selon ta topologie (un seul switch isolé → arrête-toi à la phase 8 ; plusieurs switchs + routeur → va jusqu'au bout).
+Ordre logique unique, de la remise à zéro d'un appareil jusqu'à un réseau segmenté, routé, redondant et sécurisé. Chaque phase explique pourquoi elle vient à ce moment précis. À adapter selon ta topologie (un seul switch isolé → arrête-toi à la phase 8 ; plusieurs switchs + routeur → va jusqu'au bout ; liens redondants entre switchs → inclut la phase STP).
 
 Référence du lexique complet des commandes : voir `Lexique_Commandes_Cisco.md`.
 
@@ -151,7 +151,7 @@ ssh -l admin IP_DE_GESTION_DU_SWITCH
 
 > **Pourquoi ici :** avant d'aller plus loin dans la segmentation VLAN, on confirme que la base (IP, mots de passe, SSH) fonctionne. C'est aussi le point d'arrêt naturel si ta topologie ne comporte qu'un seul switch isolé.
 
-*(Si ta topologie s'arrête à un switch + PC, tu peux t'arrêter ici après la Phase 12 de durcissement. Les phases suivantes concernent une topologie multi-switchs et/ou avec routeur.)*
+*(Si ta topologie s'arrête à un switch + PC, tu peux t'arrêter ici après la Phase 14 de durcissement. Les phases suivantes concernent une topologie multi-switchs et/ou avec routeur.)*
 
 ---
 
@@ -174,7 +174,7 @@ exit
 **IP des PC concernés**, à mettre à jour pour correspondre à leur nouveau VLAN :
 - Adresse IP (dans le bon sous-réseau)
 - Masque
-- Passerelle (l'IP de la future sous-interface du routeur pour ce VLAN — configurée en Phase 11)
+- Passerelle (l'IP de la future sous-interface du routeur pour ce VLAN — configurée en Phase 12)
 
 > **Pourquoi ici :** on crée d'abord la structure logique (les VLANs) puis on y range les ports — dans cet ordre uniquement, sinon `switchport access vlan N` échoue si le VLAN N n'existe pas encore.
 >
@@ -208,7 +208,37 @@ show cdp neighbors
 
 ---
 
-## Phase 11 — Trunk vers le routeur + routage inter-VLAN (router-on-a-stick)
+## Phase 11 — Redondance et Spanning Tree (si plusieurs liens physiques entre switchs)
+
+*Cette phase ne s'applique que si ta topologie comporte volontairement plusieurs chemins physiques entre deux switchs (redondance).* Le STP (PVST+ activé par défaut sur Cisco) gère cela automatiquement, mais il est bon de le vérifier et de l'orienter plutôt que de le subir.
+
+**Vérifier le fonctionnement et identifier le Root Bridge :**
+```
+show spanning-tree summary
+show spanning-tree vlan 1
+```
+→ Confirme le mode (PVST), quel switch est Root Bridge, et quel port est bloqué (`Altn/BLK`) pour casser la boucle.
+
+**Choisir volontairement le Root Bridge par VLAN** (plutôt que de laisser le hasard des adresses MAC décider) :
+```
+spanning-tree vlan 1 root primary
+spanning-tree vlan 10 root primary
+```
+(à répéter par VLAN, sur le switch que tu veux voir devenir root pour ce VLAN)
+
+**PortFast** sur les ports connectés à un hôte final (jamais vers un autre switch) — accélère la disponibilité du port pour un PC :
+```
+interface fa0/1
+spanning-tree portfast
+```
+
+> **Pourquoi ici, entre le trunking (Phase 10) et le router-on-a-stick (Phase 12) :** le STP n'a de sens qu'une fois qu'il y a une vraie redondance de liens à gérer (donc après le trunking) ; on le règle avant de passer au routeur, pour que la topologie de niveau 2 soit stable et connue avant d'y construire le routage inter-VLAN par-dessus.
+>
+> BPDU Guard (protection contre un switch non autorisé branché sur un port hôte) est traité en Phase 14 avec le reste du durcissement, car c'est une mesure de sécurité et non une étape de mise en service.
+
+---
+
+## Phase 12 — Trunk vers le routeur + routage inter-VLAN (router-on-a-stick)
 
 **Sur le switch**, côté port face au routeur : même config de trunk qu'à la Phase 10.
 
@@ -236,7 +266,7 @@ end
 copy running-config startup-config
 ```
 
-> **Pourquoi ici, en dernier des étapes de connectivité :** le routeur ne peut router entre VLANs qu'une fois que (a) les VLANs existent (Phase 9) et (b) le trunk qui les transporte jusqu'à lui est en place (Phase 10). C'est la dernière pièce qui manque pour que deux PC sur des VLANs différents puissent enfin communiquer.
+> **Pourquoi ici, en dernier des étapes de connectivité :** le routeur ne peut router entre VLANs qu'une fois que (a) les VLANs existent (Phase 9), (b) le trunk qui les transporte jusqu'à lui est en place (Phase 10), et (c) la topologie de niveau 2 est stabilisée par STP si redondante (Phase 11). C'est la dernière pièce qui manque pour que deux PC sur des VLANs différents puissent enfin communiquer.
 
 **Vérification :**
 ```
@@ -247,7 +277,17 @@ show ip route
 
 ---
 
-## Phase 12 — Durcissement final (sécurité)
+## Phase 13 — Vérification de connectivité inter-VLAN
+
+```
+ping <PC1> → <passerelle PC1>
+ping <PC1> → <PC2, autre VLAN>
+```
+> Le premier ping après un changement de topologie peut échouer le temps de la résolution ARP — retenter avant de conclure à un problème.
+
+---
+
+## Phase 14 — Durcissement final (sécurité)
 
 ```
 configure terminal
@@ -282,24 +322,29 @@ switchport port-security violation shutdown
 no shutdown
 ```
 
-> **Pourquoi tout ceci en dernier :** le durcissement final vient après que **tout fonctionne** — on ferme ce qui n'est pas utile (ports inutilisés, VLAN 1 par défaut, service HTTP non chiffré) et on verrouille ce qui reste (Port Security) une fois que la topologie cible est stable. Durcir trop tôt complique le débogage des étapes précédentes.
+**BPDU Guard sur les ports PortFast (protection contre un switch non autorisé branché sur un port hôte) :**
+```
+interface fa0/1
+spanning-tree bpduguard enable
+```
+(ou globalement, sur tous les ports déjà en PortFast : `spanning-tree portfast bpduguard default` en mode config globale)
+
+> **Pourquoi tout ceci en dernier :** le durcissement final vient après que **tout fonctionne** — on ferme ce qui n'est pas utile (ports inutilisés, VLAN 1 par défaut, service HTTP non chiffré) et on verrouille ce qui reste (Port Security, BPDU Guard) une fois que la topologie cible est stable. Durcir trop tôt complique le débogage des étapes précédentes.
 
 ---
 
-## Phase 13 — Vérifications finales de connectivité
+## Phase 15 — Vérifications finales
 
 ```
-ping <PC1> → <passerelle PC1>
-ping <PC1> → <PC2, autre VLAN>
+ping <tous les PC entre eux selon la topologie attendue>
 show mac address-table
 show port-security interface <port>
+show spanning-tree summary
 ```
-
-> Le premier ping après un changement de topologie peut échouer le temps de la résolution ARP — retenter avant de conclure à un problème.
 
 ---
 
-## Phase 14 — Sauvegarde finale
+## Phase 16 — Sauvegarde finale
 
 Sur **chaque** appareil modifié (switchs et routeur) :
 ```
@@ -320,10 +365,14 @@ copy running-config startup-config
 6. VLAN de gestion + IP du switch
 7. Mots de passe locaux
 8. SSH (+ sauvegarde intermédiaire)
-9. Vérification de connectivité de base *(point d'arrêt possible pour un switch isolé, après la Phase 12)*
+9. Vérification de connectivité de base *(point d'arrêt possible pour un switch isolé, après la Phase 14)*
 10. VLANs de données + assignation des ports
 11. Trunking entre switchs
-12. Trunk + router-on-a-stick sur le routeur
-13. Durcissement final (ports inutilisés, VLAN 1, HTTP, Port Security)
-14. Vérifications finales
-15. Sauvegarde finale
+12. Spanning Tree — vérification, choix du Root Bridge, PortFast *(si topologie redondante)*
+13. Trunk + router-on-a-stick sur le routeur
+14. Vérification de connectivité inter-VLAN
+15. Durcissement final (ports inutilisés, VLAN 1, HTTP, Port Security, BPDU Guard)
+16. Vérifications finales
+17. Sauvegarde finale
+
+*(La numérotation ci-dessus suit l'ordre logique de lecture ; elle correspond aux Phases 0 à 16 détaillées plus haut, décalées de +1 car la Phase 0 — câblage — n'est pas comptée comme une "étape de configuration".)*

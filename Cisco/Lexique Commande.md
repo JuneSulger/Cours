@@ -1,6 +1,6 @@
 # Lexique des commandes Cisco IOS
 
-*Compilé à partir de l'ensemble des TP et supports de théorie : Sécurisation de base, Connectivité de base avec un switch, VLAN & Trunking, TP1 Démarrage, TP physique sur rack.*
+*Compilé à partir de l'ensemble des TP et supports de théorie : Sécurisation de base, Connectivité de base avec un switch, VLAN & Trunking, TP1 Démarrage, TP physique sur rack, STP/RSTP/PortFast/BPDU Guard.*
 
 Les commandes sont classées par ce à quoi elles servent, pas par ordre alphabétique — pour retrouver rapidement "comment on fait X".
 
@@ -145,7 +145,39 @@ reload
 
 ---
 
-## 10. Router-on-a-stick (routage inter-VLAN sur routeur)
+## 10. Redondance et Spanning Tree Protocol (STP / RSTP / PVST+ / MST)
+
+| Commande | Effet |
+|---|---|
+| `show spanning-tree` | Vue complète : version STP, Root ID, délais (Hello/Max Age/Forward Delay), Bridge ID local, statut/coût/priorité des interfaces |
+| `show spanning-tree summary` | Résumé STP : mode (PVST), root bridge par VLAN, état des ports |
+| `show spanning-tree vlan N` | Détail STP pour un VLAN donné (Root ID, Bridge ID, rôle de chaque interface) |
+| `show spanning-tree vlan N root detail` | Détail du root bridge pour un VLAN |
+| `show spanning-tree vlan N bridge detail` | Détail de la config STP du switch local pour un VLAN |
+| `spanning-tree vlan N root primary` | Force le switch à devenir root bridge pour le VLAN N (abaisse automatiquement sa priorité) |
+| `spanning-tree vlan N hello SECONDES` | Délai entre les messages STP (Hello) |
+| `spanning-tree vlan N max-age SECONDES` | Temps de rétention en mémoire des messages Hello |
+| `spanning-tree vlan N forward-delay SECONDES` | Temps d'attente avant changement d'état d'un port |
+| `spanning-tree mode mst` | Active le mode MST (une seule instance STP pour plusieurs VLANs, économise les ressources) |
+| `spanning-tree mst configuration` | Entre en config MST (`region-name`, `instance N vlan X,Y,Z`) |
+| `[no] debug spanning-tree events` | Active/désactive le debug STP en temps réel (affiche les transitions d'état) — **non simulé sur Packet Tracer** |
+
+**PortFast et BPDU Guard (surcouches sur les ports d'accès) :**
+| Commande | Effet |
+|---|---|
+| `spanning-tree portfast` | Fait passer un port directement en `forwarding` (au lieu des ~30 sec de convergence normale) — **uniquement sur un port relié à un hôte final**, jamais vers un autre switch |
+| `[no] spanning-tree bpduguard enable` | (Dés)active BPDU Guard sur un port : coupe automatiquement (`err-disabled`) un port non-trunk qui reçoit un BPDU (signe qu'un switch non autorisé y a été branché) |
+| `spanning-tree portfast default` | Active PortFast sur tous les ports éligibles |
+| `spanning-tree portfast bpduguard default` | Active BPDU Guard sur tous les ports déjà en PortFast |
+
+**Repères théoriques :**
+- **BID (Bridge ID)** = priorité (32768 par défaut) + numéro de VLAN ; le plus faible l'emporte pour devenir Root Bridge ; en cas d'égalité, l'adresse MAC la plus "petite" tranche.
+- **IEEE 802.1D** (STP original, lent) → **802.1w / RSTP** (rapide) → **PVST+** (Cisco, une instance par VLAN, activé par défaut) → **MST** (Cisco, une instance pour plusieurs VLANs).
+- Méthodologie de dépannage : 1) connaître la topologie L2, 2) déterminer qui *devrait* être root, 3) vérifier que c'est le cas, 4) visiter chaque switch pour confirmer les ports bloqués/forwarding.
+
+---
+
+## 11. Router-on-a-stick (routage inter-VLAN sur routeur)
 
 | Commande | Effet |
 |---|---|
@@ -155,7 +187,7 @@ reload
 
 ---
 
-## 11. Sécurisation des accès (mots de passe, chiffrement)
+## 12. Sécurisation des accès (mots de passe, chiffrement)
 
 | Commande | Effet |
 |---|---|
@@ -169,7 +201,7 @@ reload
 
 ---
 
-## 12. Accès distant (Telnet / SSH)
+## 13. Accès distant (Telnet / SSH)
 
 | Commande | Effet |
 |---|---|
@@ -191,7 +223,7 @@ reload
 
 ---
 
-## 13. Ports inutilisés et services non sécurisés
+## 14. Ports inutilisés et services non sécurisés
 
 | Commande | Effet |
 |---|---|
@@ -201,7 +233,7 @@ reload
 
 ---
 
-## 14. Port Security (protection par adresse MAC)
+## 15. Port Security (protection par adresse MAC)
 
 | Commande | Effet |
 |---|---|
@@ -216,7 +248,7 @@ reload
 
 ---
 
-## 15. Table des adresses MAC
+## 16. Table des adresses MAC
 
 | Commande | Effet |
 |---|---|
@@ -230,7 +262,7 @@ reload
 
 ---
 
-## 16. Diagnostic réseau (routeur et switch)
+## 17. Diagnostic réseau (routeur et switch)
 
 | Commande | Effet |
 |---|---|
@@ -241,9 +273,9 @@ reload
 
 ---
 
-## 17. Réinitialiser un port en erreur (`err-disabled`)
+## 18. Réinitialiser un port en erreur (`err-disabled`)
 
-Qu'elle vienne de Port Security ou d'un autre mécanisme de protection, une interface en `err-disabled` **ne se réactive jamais automatiquement**, même après avoir retiré la cause du problème.
+Qu'elle vienne de Port Security ou de BPDU Guard, une interface en `err-disabled` **ne se réactive jamais automatiquement**, même après avoir retiré la cause du problème.
 
 ```
 interface PORT
@@ -253,7 +285,7 @@ no shutdown
 
 ---
 
-## 18. Diagnostic côté PC (client)
+## 19. Diagnostic côté PC (client)
 
 | Commande | Effet |
 |---|---|
